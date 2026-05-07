@@ -5,12 +5,9 @@ const path = require('path');
 const dbPath = path.join(__dirname, 'evchain.db');
 const db = new Database(dbPath);
 
-// Enable WAL mode for better concurrency
 db.pragma('journal_mode = WAL');
 
-// Create tables
 db.exec(`
-  -- Users table
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
@@ -24,7 +21,6 @@ db.exec(`
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 
-  -- Evidence table
   CREATE TABLE IF NOT EXISTS evidence (
     id TEXT PRIMARY KEY,
     case_number TEXT NOT NULL,
@@ -39,11 +35,9 @@ db.exec(`
     hash_sha256 TEXT,
     is_biohazard INTEGER DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (assigned_officer) REFERENCES users(username)
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 
-  -- Custody events table (append-only)
   CREATE TABLE IF NOT EXISTS custody_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     evidence_id TEXT NOT NULL,
@@ -54,11 +48,9 @@ db.exec(`
     notes TEXT,
     new_status TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    ip_address TEXT,
-    FOREIGN KEY (evidence_id) REFERENCES evidence(id) ON DELETE RESTRICT
+    ip_address TEXT
   );
 
-  -- Audit log (append-only)
   CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_type TEXT NOT NULL,
@@ -69,7 +61,6 @@ db.exec(`
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 
-  -- QR tokens table
   CREATE TABLE IF NOT EXISTS qr_tokens (
     id TEXT PRIMARY KEY,
     evidence_id TEXT NOT NULL,
@@ -78,11 +69,9 @@ db.exec(`
     is_revoked INTEGER DEFAULT 0,
     scan_count INTEGER DEFAULT 0,
     last_scanned TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (evidence_id) REFERENCES evidence(id) ON DELETE CASCADE
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 
-  -- Create indexes for performance
   CREATE INDEX IF NOT EXISTS idx_evidence_officer ON evidence(assigned_officer);
   CREATE INDEX IF NOT EXISTS idx_evidence_case ON evidence(case_number);
   CREATE INDEX IF NOT EXISTS idx_evidence_status ON evidence(status);
@@ -91,21 +80,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(username);
   CREATE INDEX IF NOT EXISTS idx_audit_event ON audit_log(event_type);
 
-  -- Trigger to prevent custody_events deletion
   CREATE TRIGGER IF NOT EXISTS prevent_custody_delete
   BEFORE DELETE ON custody_events
   BEGIN
     SELECT RAISE(ABORT, 'Custody events are immutable and cannot be deleted');
   END;
 
-  -- Trigger to prevent custody_events update
   CREATE TRIGGER IF NOT EXISTS prevent_custody_update
   BEFORE UPDATE ON custody_events
   BEGIN
     SELECT RAISE(ABORT, 'Custody events are immutable and cannot be modified');
   END;
 
-  -- Trigger to update evidence updated_at
   CREATE TRIGGER IF NOT EXISTS update_evidence_timestamp
   AFTER UPDATE ON evidence
   BEGIN
@@ -113,7 +99,6 @@ db.exec(`
   END;
 `);
 
-// Insert default admin user
 const adminPassword = bcrypt.hashSync('admin123', 12);
 const adminExists = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
 
@@ -121,32 +106,18 @@ if (!adminExists) {
   db.prepare(`
     INSERT INTO users (id, username, password_hash, name, badge, role, is_active)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    'user-admin-001',
-    'admin',
-    adminPassword,
-    'System Administrator',
-    '',
-    'admin',
-    1
-  );
-  console.log('✅ Default admin user created: admin / admin123');
+  `).run('user-admin-001', 'admin', adminPassword, 'System Administrator', '', 'admin', 1);
+  console.log('Default admin created: admin / admin123');
 }
 
-// Create view for evidence summary
 db.exec(`
   CREATE VIEW IF NOT EXISTS v_evidence_summary AS
-  SELECT 
-    e.*,
-    u.name as officer_name,
-    COUNT(ce.id) as custody_count
+  SELECT e.*, u.name as officer_name, COUNT(ce.id) as custody_count
   FROM evidence e
   LEFT JOIN users u ON e.assigned_officer = u.username
   LEFT JOIN custody_events ce ON e.id = ce.evidence_id
   GROUP BY e.id;
 `);
 
-console.log('✅ Database initialized successfully at:', dbPath);
-console.log('📊 Tables created: users, evidence, custody_events, audit_log, qr_tokens');
-
+console.log('Database initialized at:', dbPath);
 db.close();
