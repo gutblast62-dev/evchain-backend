@@ -22,7 +22,8 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
 
   const allowed = [
-    'https://gutblast62-dev.github.io',
+    'https://github.com/gutblast62-dev/Evchain.github.io',
+    'https://gutblast62-dev.github.io/Evchain.github.io/',
     'http://localhost:3000',
     'http://localhost:5500',
     'http://localhost:8080',
