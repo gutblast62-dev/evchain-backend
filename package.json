@@ -4,7 +4,7 @@
   "description": "EVCHAIN Evidence Management System Backend",
   "main": "server-fixed.js",
   "scripts": {
-    "start": "node server-fixed.js",
+    "start": "node server.js",
     "dev": "nodemon server-fixed.js",
     "init-db": "node init-db.js"
   },
